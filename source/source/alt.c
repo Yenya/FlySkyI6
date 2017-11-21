@@ -453,6 +453,34 @@ void BatteryType() {
 			if(sensorID >= IBUS_MEAS_TYPE_GPS_LAT && sensorID <= IBUS_MEAS_TYPE_S8a && sensorValue < SENSORS_ARRAY_LENGTH){
 				sensorValue = longSensors[sensorValue];
 			}
+
+			if(sensorID == IBUS_MEAS_TYPE_CLIMB_RATE && sensorValue > -10000) {
+				// climb rate is signed m/s * 100
+				if (sensorValue > 1024) {
+					sensorValue = 2048;
+				} else if (sensorValue >= 0) {
+					sensorValue = (1024+sensorValue);
+				} else if (sensorValue < -512) {
+					sensorValue = 512;
+				} else {
+					sensorValue = 1024 + sensorValue;
+				}
+
+				if((timer - lastAlarm) >= 2000) {
+					*((int32_t *)LAST_ALARM_TIMER) = timer;
+					if(someBeepCheck() >= 2){
+					       beep(1024,25);
+					       beep(0,50);
+					}
+					if(someBeepCheck() >= 2){
+					       beep(sensorValue,50);
+					       beep(0,50);
+					}
+				}
+				beepCount = 0;
+				break;
+			}
+
 			if(modConfig.alarm[i].operator == OPERATOR_GT){
 				if(sensorValue > modConfig.alarm[i].value){
 					beepCount = i+2;
