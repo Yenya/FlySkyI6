@@ -438,6 +438,7 @@ void BatteryType() {
 	 int32_t lastTelemetryUpdate = *((int32_t *)TELEMETRY_UPDATE_TIMER);
 	 uint8_t beepCount = 0;
 	 uint8_t sensorID = 0;
+	 static int32_t prev_vario; // FIXME: use global addres
 
 	 if(timer < 100 ) return;
 
@@ -453,6 +454,39 @@ void BatteryType() {
 			if(sensorID >= IBUS_MEAS_TYPE_GPS_LAT && sensorID <= IBUS_MEAS_TYPE_S8a && sensorValue < SENSORS_ARRAY_LENGTH){
 				sensorValue = longSensors[sensorValue];
 			}
+
+			if (i == 2) {
+				if (sensorValue != prev_vario
+					&& (timer - lastAlarm) >= 2000) {
+
+					int32_t sens_diff = sensorValue - prev_vario;
+					// TODO: maybe scale the pressure down?
+
+					prev_vario = sensorValue;
+
+					if (sens_diff >= 1024) {
+						sens_diff = 2048;
+					} else if (sens_diff <= -512) {
+						sens_diff = 512;
+					} else { // between -512 and 1024, except 0
+						sens_diff = 1024 + sens_diff;
+					}
+
+					*((int32_t *)LAST_ALARM_TIMER) = timer;
+					if(someBeepCheck() >= 2){
+					       beep(1024,25);
+					       beep(0,50);
+					}
+					if(someBeepCheck() >= 2){
+					       beep(sens_diff,50);
+					       beep(0,50);
+					}
+
+					beepCount = 0;
+				}
+				break;
+			}
+
 			if(modConfig.alarm[i].operator == OPERATOR_GT){
 				if(sensorValue > modConfig.alarm[i].value){
 					beepCount = i+2;
@@ -572,14 +606,17 @@ void AlarmConfig(){
 				y = 16+i*8;
 				alarmItem = alarms[i];
 				displayTextAt((char*)getSensorName(alarmItem.sensorID), 9, y,0);
-				buffer[0] = 0;
-				buffer[1] = 0;
-				if(alarmItem.operator == OPERATOR_LT) buffer[0] = '<';
-				if(alarmItem.operator == OPERATOR_GT) buffer[0] = '>';
-				displayTextAt(buffer, 56, y,0);
-				buffer[0] = 0;
-				formatSensorValue(buffer, alarmItem.sensorID, alarmItem.value);
-				displayTextAt(buffer, 72, y,0);
+				if (i < 2) {
+					buffer[0] = 0;
+					buffer[1] = 0;
+					if(alarmItem.operator == OPERATOR_LT) buffer[0] = '<';
+					if(alarmItem.operator == OPERATOR_GT) buffer[0] = '>';
+					displayTextAt(buffer, 56, y,0);
+					buffer[0] = 0;
+					formatSensorValue(buffer, alarmItem.sensorID, alarmItem.value);
+					displayTextAt(buffer, 72, y,0);
+				}
+				// TODO: display texxt "Vario" at row 2 col 1
 			 }
  			 columnOffset = 1;
  			 if(column==1) columnOffset = 48;
@@ -597,7 +634,10 @@ void AlarmConfig(){
 					 column = 0;
 					 row++;
 				 }
-				 if(row >=3)row = 0;
+				 if(row >= 2 && column > 0) {
+					row = 0;
+					column = 0;
+				 }
 			 }
 			 else if(key == KEY_SHORT_UP || key == KEY_LONG_UP){
 				 if(column == 2){
